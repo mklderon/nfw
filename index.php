@@ -72,11 +72,14 @@ $container->singleton(ServiceFactory::class, function ($container) use ($service
 // Crear una instancia del enrutador
 $router = new Router($container);
 
-// Cargar las rutas desde el archivo routes.php
-require __DIR__ . '/src/routes/routes.php';
+// Agregar middleware global de manejo de errores (debe ser el primero)
+$router->addGlobalMiddleware(Core\Middlewares\ErrorHandlerMiddleware::class);
 
 // Agregar middleware global de CORS
 $router->addGlobalMiddleware(App\Middleware\CorsMiddleware::class);
+
+// Cargar las rutas desde el archivo routes.php
+require __DIR__ . '/src/routes/routes.php';
 
 // Manejar la solicitud entrante
 $router->handle();

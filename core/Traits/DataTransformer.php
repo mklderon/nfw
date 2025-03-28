@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Traits;
+namespace Core\Traits;
 
 trait DataTransformer
 {

@@ -104,61 +104,41 @@ class Router {
                 $request = new Request();
                 $response = new Response();
     
-                try {
-                    // Obtener middleware de la ruta
-                    $middlewareInstances = [];
-                    foreach ($route['middleware'] as $middlewareClass) {
-                        $middlewareInstances[] = $this->container->make($middlewareClass);
-                    }
+                // Obtener middleware de la ruta
+                $middlewareInstances = [];
+                foreach ($route['middleware'] as $middlewareClass) {
+                    $middlewareInstances[] = $this->container->make($middlewareClass);
+                }
     
-                    // Obtener middleware global
-                    $globalMiddlewareInstances = [];
-                    foreach ($this->globalMiddleware as $globalMiddlewareClass) {
-                        $globalMiddlewareInstances[] = $this->container->make($globalMiddlewareClass);
-                    }
+                // Obtener middleware global
+                $globalMiddlewareInstances = [];
+                foreach ($this->globalMiddleware as $globalMiddlewareClass) {
+                    $globalMiddlewareInstances[] = $this->container->make($globalMiddlewareClass);
+                }
     
-                    $handler = function () use ($route, $request, $response, $parameters) {
-                        list($controllerClass, $method) = $route['action'];
-                        $controller = $this->container->make($controllerClass);
-                        return $controller->$method($request, $response, $parameters);
+                $handler = function () use ($route, $request, $response, $parameters) {
+                    list($controllerClass, $method) = $route['action'];
+                    $controller = $this->container->make($controllerClass);
+                    return $controller->$method($request, $response, $parameters);
+                };
+    
+                // Agregar middleware de la ruta
+                foreach ($middlewareInstances as $middleware) {
+                    $handler = function () use ($middleware, $request, $response, $handler) {
+                        return $middleware->handle($request, $response, $handler);
                     };
+                }
     
-                    // Agregar middleware de la ruta
-                    foreach ($middlewareInstances as $middleware) {
-                        $handler = function () use ($middleware, $request, $response, $handler) {
-                            return $middleware->handle($request, $response, $handler);
-                        };
-                    }
+                // Agregar middleware global
+                foreach ($globalMiddlewareInstances as $globalMiddleware) {
+                    $handler = function () use ($globalMiddleware, $request, $response, $handler) {
+                        return $globalMiddleware->handle($request, $response, $handler);
+                    };
+                }
     
-                    // Agregar middleware global
-                    foreach ($globalMiddlewareInstances as $globalMiddleware) {
-                        $handler = function () use ($globalMiddleware, $request, $response, $handler) {
-                            return $globalMiddleware->handle($request, $response, $handler);
-                        };
-                    }
-    
-                    $responseObject = $handler();
-                    if ($responseObject instanceof Response) {
-                        $responseObject->send();
-                    }
-                } catch (ValidationException $e) {
-                    $response->json([
-                        'status' => 'error',
-                        'message' => $e->getMessage(),
-                        'errors' => $e->getErrors()
-                    ], 400)->send();
-                } catch (NotFoundException $e) {
-                    $response->json([
-                        'status' => 'error',
-                        'message' => $e->getMessage()
-                    ], 404)->send();
-                } catch (\Exception $e) {
-                    $statusCode = $e->getCode() ?: 500; // Usar el código de la excepción si existe
-                    $response->json([
-                        'status' => 'error',
-                        'message' => 'Internal server error',
-                        'details' => $e->getMessage() // Quitar en producción
-                    ], $statusCode)->send();
+                $responseObject = $handler();
+                if ($responseObject instanceof Response) {
+                    $responseObject->send();
                 }
                 
                 return; // Solo retornamos si encontramos una ruta que coincida
