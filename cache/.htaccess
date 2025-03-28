@@ -1,0 +1,3 @@
+# Versión alternativa para servidores Apache más antiguos
+Order deny,allow
+Deny from all

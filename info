@@ -1,0 +1,11 @@
+Metodo para limpiar cache expirado manualmente:
+
+public function clearExpired(): void
+{
+    foreach (glob($this->cacheDir . '/*.cache') as $file) {
+        $data = unserialize(file_get_contents($file));
+        if ($data['expires_at'] < time()) {
+            unlink($file);
+        }
+    }
+}
