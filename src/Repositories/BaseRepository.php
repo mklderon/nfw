@@ -13,6 +13,12 @@ abstract class BaseRepository {
         $this->db = $db;
     }
 
+    // Método protegido para todos los repositorios
+    protected function getTableName(): string
+    {
+        return Db::sanitizeIdentifier($this->table);
+    }
+
     /**
      * Ejecuta una operación de base de datos de forma segura y maneja excepciones.
      *

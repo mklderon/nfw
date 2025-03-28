@@ -13,22 +13,22 @@ class JwtService {
         $this->secretKey = $secretKey;
     }
 
-    public function generateToken($payload) {
+    public function generateToken($payload, $expiration = null) {
         $issuedAt = time();
-        $expiration = $_ENV['EXPIRATION'];
-        $expireAt = $issuedAt + $expiration;
-
+        $defaultExpiration = isset($_ENV['JWT_EXPIRATION']) ? (int)$_ENV['JWT_EXPIRATION'] : 3600; // Por ejemplo, 1 hora por defecto
+        $expireAt = $expiration !== null ? $issuedAt + $expiration : $issuedAt + $defaultExpiration;
+    
         $tokenData = [
             'iat'  => $issuedAt,
             'exp'  => $expireAt,
             'data' => $payload
         ];
-
+    
         return JWT::encode($tokenData, $this->secretKey, $this->algorithm);
-    }
+    }    
 
-    public function generateRefreshToken($payload, $expiration = 604800) { // Nuevo método para Refresh Token
-        return $this->generateToken($payload, $expiration); // 7 días por defecto
+    public function generateRefreshToken($payload, $expiration = 86400) { // 24 horas por defecto
+        return $this->generateToken($payload, $expiration);
     }
 
     public function verifyToken($token) {

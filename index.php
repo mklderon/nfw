@@ -6,6 +6,22 @@ require __DIR__ . '/vendor/autoload.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
+$requiredEnvVars = [
+    'HOST', 'DATABASE', 'USERNAME', 'PASSWORD', 
+    'JWT_SECRET', 'APP_ENV', 'BASE_PATH'
+];
+
+$missingVars = [];
+foreach ($requiredEnvVars as $var) {
+    if (empty($_ENV[$var])) {
+        $missingVars[] = $var;
+    }
+}
+
+if (!empty($missingVars)) {
+    die('Error: Faltan variables de entorno requeridas: ' . implode(', ', $missingVars));
+}
+
 if ($_ENV['APP_ENV'] === 'production') {
     ini_set('display_errors', 0);
     ini_set('display_startup_errors', 0);
@@ -71,6 +87,8 @@ $container->singleton(ServiceFactory::class, function ($container) use ($service
 
 // Crear una instancia del enrutador
 $router = new Router($container);
+
+$router->addGlobalMiddleware(Core\Middlewares\SecurityHeadersMiddleware::class);
 
 // Agregar middleware global de manejo de errores (debe ser el primero)
 $router->addGlobalMiddleware(Core\Middlewares\ErrorHandlerMiddleware::class);

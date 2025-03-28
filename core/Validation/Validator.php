@@ -43,6 +43,12 @@ class Validator {
                             $errors[$field][] = $this->getMessage($field, 'max', "El campo $field no puede exceder los $param caracteres");
                         }
                         break;
+                    case 'password_strength':
+                        if ($value && !$this->validatePasswordStrength($value)) {
+                            $errors[$field][] = $this->getMessage($field, 'password_strength', 
+                                "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial");
+                        }
+                        break;
                     // Más reglas aquí
                 }
             }
@@ -59,5 +65,12 @@ class Validator {
 
     private function getMessage(string $field, string $rule, string $default): string {
         return $this->messages[$field][$rule] ?? $default;
+    }
+    
+    private function validatePasswordStrength($password): bool
+    {
+        // Debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial
+        $pattern = '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/';
+        return preg_match($pattern, $password) === 1;
     }
 }

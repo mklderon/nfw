@@ -1,3 +1,8 @@
-# Versión alternativa para servidores Apache más antiguos
-Order deny,allow
-Deny from all
+# Denegar acceso a todos los archivos
+<FilesMatch "\.(php|env)$">
+  Order Allow,Deny
+  Deny from all
+</FilesMatch>
+
+# Prevenir listado de directorio
+Options -Indexes

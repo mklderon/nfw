@@ -97,27 +97,54 @@ class Request {
         $key = str_replace(' ', '-', ucwords(str_replace('_', ' ', strtolower($key))));
         return $this->headers[$key] ?? $default;
     }
+    
+    public function getRawJson($key = null, $default = null) {
+        return $this->getParams($key, $default, $this->jsonParams, 'raw');
+    }
+    
+    public function getHtmlSafeInput($key = null, $default = null) {
+        $allParams = array_merge($this->postParams, $this->jsonParams);
+        return $this->getParams($key, $default, $allParams, 'html');
+    }
+    
+    public function getSqlSafeInput($key = null, $default = null) {
+        $allParams = array_merge($this->postParams, $this->jsonParams);
+        return $this->getParams($key, $default, $allParams, 'sql');
+    }
 
-    protected function getParams($key, $default, $source, $sanitize = true) {
+    protected function getParams($key, $default, $source, $sanitizeContext = 'default') {
         if ($key === null) {
-            return $sanitize ? $this->sanitize($source) : $source;
+            return $sanitizeContext !== false ? $this->sanitize($source, $sanitizeContext) : $source;
         }
         
         $value = $source[$key] ?? $default;
-        return $sanitize ? $this->sanitize($value) : $value;
+        return $sanitizeContext !== false ? $this->sanitize($value, $sanitizeContext) : $value;
     }
-    private function sanitize($data) {
+
+    private function sanitize($data, $context = 'default') {
         if (is_null($data)) {
             return null;
         }
         
         if (!is_array($data)) {
-            return is_string($data) ? htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8') : $data;
+            if (is_string($data)) {
+                switch ($context) {
+                    case 'html':
+                        return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
+                    case 'sql':
+                        return trim(str_replace(['\\', "\0", "'", '"'], ['\\\\', '', "\'", '\"'], $data));
+                    case 'raw':
+                        return $data; // Sin sanitización
+                    default:
+                        return trim($data);
+                }
+            }
+            return $data;
         }
-
+    
         $sanitized = [];
         foreach ($data as $key => $value) {
-            $sanitized[$key] = $this->sanitize($value);
+            $sanitized[$key] = $this->sanitize($value, $context);
         }
         return $sanitized;
     }

@@ -8,14 +8,14 @@ class ClienteRepository extends BaseRepository
 
     public function all()
     {
-        return $this->db->query("SELECT * FROM {$this->table}")->fetchAll();
+        return $this->db->query("SELECT * FROM {$this->getTableName()}")->fetchAll();
     }
 
     public function create(array $data)
     {
         return $this->executeSafely(
             function () use ($data) {
-                return $this->db->save($this->table, $data);
+                return $this->db->save($this->getTableName(), $data);
             },
             'Error al crear el cliente'
         );
@@ -25,7 +25,7 @@ class ClienteRepository extends BaseRepository
     {
         return $this->executeSafely(
             function () use ($id) {
-                $result = $this->db->queryRow("SELECT * FROM {$this->table} WHERE id_cliente = ?", [$id]);
+                $result = $this->db->queryRow("SELECT * FROM {$this->getTableName()} WHERE id_cliente = ?", [$id]);
                 return $result ?: null;
             },
             'Error al buscar el cliente'
@@ -36,7 +36,7 @@ class ClienteRepository extends BaseRepository
     {
         return $this->executeSafely(
             function () use ($cedula) {
-                return $this->db->queryRow("SELECT * FROM {$this->table} WHERE cedula = ?", [$cedula]);
+                return $this->db->queryRow("SELECT * FROM {$this->getTableName()} WHERE cedula = ?", [$cedula]);
             },
             'Error al buscar el cliente por cédula'
         );
@@ -46,7 +46,7 @@ class ClienteRepository extends BaseRepository
     {
         return $this->executeSafely(
             function () use ($criteria) {
-                $query = "SELECT * FROM {$this->table} WHERE 1=1";
+                $query = "SELECT * FROM " . $this->getTableName() . " WHERE 1=1";
                 $params = [];
 
                 if (!empty($criteria['id'])) {
@@ -55,19 +55,19 @@ class ClienteRepository extends BaseRepository
                 }
                 if (!empty($criteria['nombre'])) {
                     $query .= ' AND nombre LIKE ?';
-                    $params[] = "%{$criteria['nombre']}%";
+                    $params[] = "%" . trim($criteria['nombre']) . "%";
                 }
                 if (!empty($criteria['apellidos'])) {
                     $query .= ' AND apellidos LIKE ?';
-                    $params[] = "%{$criteria['apellidos']}%";
+                    $params[] = "%" . trim($criteria['apellidos']) . "%";
                 }
                 if (!empty($criteria['cedula'])) {
                     $query .= ' AND cedula LIKE ?';
-                    $params[] = "%{$criteria['cedula']}%";
+                    $params[] = "%" . trim($criteria['cedula']) . "%";
                 }
                 if (!empty($criteria['telefono'])) {
                     $query .= ' AND telefono LIKE ?';
-                    $params[] = "%{$criteria['telefono']}%";
+                    $params[] = "%" . trim($criteria['telefono']) . "%";
                 }
 
                 $stmt = $this->db->query($query, $params);
@@ -91,7 +91,7 @@ class ClienteRepository extends BaseRepository
                     return 0; // Nada que actualizar
                 }
 
-                return $this->db->updateItem($this->table, 'id_cliente', $updateData);
+                return $this->db->updateItem($this->getTableName(), 'id_cliente', $updateData);
             },
             'Error al actualizar el cliente'
         );
