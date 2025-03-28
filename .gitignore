@@ -1,2 +1,6 @@
 /.env
 /.vscode
+/.logs
+/.cache
+/.clean_logs.php
+/.infor
