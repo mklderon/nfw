@@ -2,13 +2,13 @@
 
 namespace App\Services;
 
-use Core\Contracts\ServiceInterface;
-use Core\Exceptions\{AppException, ValidationException};
 use Core\Http\{Request, Response};
 use Core\Services\BaseService;
+use Core\Contracts\ServiceInterface;
+use Core\Exceptions\{ValidationException, DatabaseException, AppException};
 use Core\Validation\Validator;
-use App\Contracts\VentaServiceInterface;
 use App\Repositories\VentaRepository;
+use App\Contracts\VentaServiceInterface;
 
 class VentaService extends BaseService implements ServiceInterface, VentaServiceInterface
 {
@@ -28,11 +28,14 @@ class VentaService extends BaseService implements ServiceInterface, VentaService
      */
     public function readAll(Request $request, Response $response)
     {
-        // Sin try-catch - lo maneja el middleware
-        $ventas = $this->repository->getAll();
-        $ventasFiltradas = $this->filtrarCamposExcluidos($ventas);
-        
-        return $this->successResponse($response, $ventasFiltradas);
+        try {
+            $ventas = $this->repository->getAll();
+            $ventasFiltradas = $this->filtrarCamposExcluidos($ventas);
+            
+            return $this->successResponse($response, $ventasFiltradas);
+        } catch (\Exception $e) {
+            throw $e; // Dejemos que el middleware ErrorHandlerMiddleware lo maneje
+        }
     }
 
     /**
@@ -42,20 +45,17 @@ class VentaService extends BaseService implements ServiceInterface, VentaService
     {
         // Validar que el ID sea numérico
         if (!is_numeric($id)) {
-            throw AppException::invalidOperation("El ID de venta debe ser numérico");
+            throw new AppException("El ID de venta debe ser numérico", 400);
         }
-
-        $data = ['id_venta' => $id];
-        $this->validator->validate($data);
 
         // Buscar la venta en el repositorio
         $venta = $this->repository->getById($id);
         
         if (!$venta) {
-            throw AppException::notFound("Venta");
+            throw new AppException("Venta no encontrada", 404);
         }
 
-        // Formatear el resultado
+        // Formatear el resultado - usar el método filtrarCamposExcluidos directamente
         $ventaFormateada = $this->filtrarCamposExcluidos($venta);
         
         return $this->successResponse($response, $ventaFormateada);
@@ -69,22 +69,19 @@ class VentaService extends BaseService implements ServiceInterface, VentaService
         $data = $request->input();
         
         if (empty($data)) {
-            throw AppException::invalidOperation("No se proporcionaron datos para la venta");
+            throw new ValidationException(['general' => ["No se proporcionaron datos para la venta"]]);
         }
         
         $this->validator->validate($data);
         
         // Crear la venta en el repositorio
-        try {
-            $idVenta = $this->repository->create($data);
-        } catch (\Exception $e) {
-            throw AppException::invalidOperation("Error al crear la venta: " . $e->getMessage());
-        }
+        $idVenta = $this->repository->create($data);
         
         return $this->messageResponse(
             $response, 
-            'Venta creada correctamente',
-            201
+            'Venta creada correctamente', 
+            201,
+            ['id_venta' => $idVenta]
         );
     }
 
@@ -94,78 +91,92 @@ class VentaService extends BaseService implements ServiceInterface, VentaService
     public function update(Request $request, Response $response, $id): Response
     {
         if (!is_numeric($id)) {
-            throw AppException::invalidOperation("El ID de venta debe ser numérico");
+            throw new ValidationException(['id' => ["El ID de venta debe ser numérico"]]);
         }
         
         $ventaExistente = $this->repository->getById($id);
         
         if (!$ventaExistente) {
-            throw AppException::notFound("Venta");
+            throw new AppException("Venta no encontrada", 404);
         }
         
         $data = $request->input();
         
         if (empty($data)) {
-            throw AppException::invalidOperation("No se proporcionaron datos para actualizar");
+            throw new ValidationException(['general' => ["No se proporcionaron datos para actualizar"]]);
         }
         
         $this->validator->validate($data);
         
-        // Determinar si es PUT (completa) o PATCH (parcial)
-        $isPutRequest = $request->method() === 'PUT';
-        $dataToUpdate = $isPutRequest 
-            ? $data 
-            : array_intersect_key($data, array_flip($this->camposDefault));
-        
         // Actualizar la venta en el repositorio
-        try {
-            $this->repository->update($id, $dataToUpdate);
-        } catch (\Exception $e) {
-            throw AppException::invalidOperation("Error al actualizar la venta: " . $e->getMessage());
-        }
+        $this->repository->update($id, $data);
         
         return $this->messageResponse($response, 'Venta actualizada correctamente');
     }
 
     /**
-     * Elimina una venta existente
+     * Elimina una venta existente (realmente la marca como cancelada)
      */
     public function delete(Request $request, Response $response, $id): Response
     {
         if (!is_numeric($id)) {
-            throw AppException::invalidOperation("El ID de venta debe ser numérico");
+            throw new ValidationException(['id' => ["El ID de venta debe ser numérico"]]);
         }
         
         $ventaExistente = $this->repository->getById($id);
         
         if (!$ventaExistente) {
-            throw AppException::notFound("Venta");
+            throw new AppException("Venta no encontrada", 404);
         }
         
-        try {
-            $this->repository->delete($id);
-        } catch (\Exception $e) {
-            throw AppException::invalidOperation("Error al eliminar la venta: " . $e->getMessage());
-        }
-        
-        return $this->messageResponse($response, 'Venta eliminada correctamente');
-    }
-    
-    /**
-     * Verifica si una venta tiene pagos asociados
-     */
-    public function verificarPagosAsociados($id): bool
-    {
+        // Verificar si la venta tiene pagos asociados
         $pagos = $this->repository->getPagosByVentaId($id);
         
         if (count($pagos) > 0) {
-            throw AppException::invalidOperation(
+            throw new AppException(
                 "No se puede eliminar la venta porque tiene pagos asociados", 
-                409, // Conflict
-                'VENTA_HAS_PAYMENTS'
+                409 // Conflict
             );
         }
         
-        return true;
+        // En lugar de eliminar, marcamos como cancelada
+        $this->repository->cambiarEstado($id, 'cancelada');
+        
+        return $this->messageResponse($response, 'Venta marcada como cancelada correctamente');
+    }
+    
+    /**
+     * Filtra los campos excluidos de un array de datos o de un registro individual
+     * 
+     * @param array $data Los datos a filtrar
+     * @param array|null $camposExcluidos Campos a excluir (opcional)
+     * @return array Los datos filtrados sin los campos excluidos
+     */
+    protected function filtrarCamposExcluidos($data, ?array $camposExcluidos = null)
+    {
+        // Usar los campos excluidos proporcionados o los definidos en la clase
+        $camposParaExcluir = $camposExcluidos ?? $this->camposSiempreExcluidos;
+        
+        // Si no hay campos para excluir, devolver los datos sin cambios
+        if (empty($camposParaExcluir)) {
+            return $data;
+        }
+        
+        // Si es un array multidimensional (múltiples registros)
+        if (isset($data[0]) && is_array($data[0])) {
+            foreach ($data as $key => $registro) {
+                $data[$key] = $this->filtrarCamposExcluidos($registro, $camposParaExcluir);
+            }
+            return $data;
+        } 
+        // Si es un array simple (un registro)
+        else {
+            foreach ($camposParaExcluir as $campo) {
+                if (array_key_exists($campo, $data)) {
+                    unset($data[$campo]);
+                }
+            }
+            return $data;
+        }
     }
 }
